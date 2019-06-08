@@ -1,25 +1,41 @@
-# coding: utf-8
-
-import certifi
+#!/usr/bin/env python3
 import os
-
-# Here's all the magic !
-os.environ['SSL_CERT_FILE'] = certifi.where()
-
-from kivy.app import App
-from kivy.uix.image import AsyncImage
+import ssl
+import unittest
 import urllib.request
 
-# Importing an "external" file to check the conf is global to the entire app
-import test
+import certifi
+import requests
+from kivy.utils import platform
 
 
-class HTTPsApp(App):
+class TestApp(unittest.TestCase):
 
-    def build(self):
-        contents = urllib.request.urlopen("https://www.google.com/").read()
-        return AsyncImage(
-            source='https://media.makeameme.org/created/its-working-oyy433.jpg'
-        )
+    URL = 'https://media.makeameme.org/created/its-working-oyy433.jpg'
+    EXPECTED_STATUS = 200
 
-HTTPsApp().run()
+    def test_requests(self):
+        """
+        The requests module handles certs seamlessly by default.
+        """
+        response = requests.get(self.URL)
+        self.assertEqual(response.status_code, self.EXPECTED_STATUS)
+
+    @unittest.skipUnless(platform == 'android', 'requires Android')
+    def test_urllib(self):
+        """
+        On Android urllib doesn't have certs by default and would crash unless
+        explicitely loaded.
+        """
+        self.assertIsNone(os.environ.get('SSL_CERT_DIR'))
+        with self.assertRaises(urllib.error.URLError) as e:
+            urllib.request.urlopen(self.URL)
+        self.assertEqual(
+            type(e.exception.args[0]), ssl.SSLCertVerificationError)
+        os.environ['SSL_CERT_FILE'] = certifi.where()
+        response = urllib.request.urlopen(self.URL)
+        self.assertEqual(response.status, self.EXPECTED_STATUS)
+
+
+if __name__ == '__main__':
+    unittest.main()
